@@ -5,7 +5,6 @@ from typing import Literal
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import BatchEncoding
 from transformers.models.gpt2.tokenization_gpt2 import GPT2Tokenizer
-from transformers.models.gpt2.tokenization_gpt2_fast import GPT2TokenizerFast
 from transformers.models.opt.modeling_opt import OPTModel, OPTForCausalLM
 from torch import Tensor
 import torch
@@ -31,6 +30,7 @@ OFFLOAD_FOLDER: Path = Path(os.environ.get("SLURM_TMPDIR", "offload"))
 
 @functools.cache
 def load_embedding_model(capacity: Capacity = DEFAULT_CAPACITY) -> OPTModel:
+    print(f"Loading OPT embedding model with {capacity} parameters...")
     pretrained_embedding_model = OPTModel.from_pretrained(
         f"facebook/opt-{capacity}",
         device_map="auto",
@@ -43,6 +43,7 @@ def load_embedding_model(capacity: Capacity = DEFAULT_CAPACITY) -> OPTModel:
 
 @functools.cache
 def load_completion_model(capacity: Capacity = DEFAULT_CAPACITY) -> OPTForCausalLM:
+    print(f"Loading OPT completion model with {capacity} parameters...")
     pretrained_causal_lm_model = OPTForCausalLM.from_pretrained(
         f"facebook/opt-{capacity}",
         device_map="auto",
@@ -50,11 +51,13 @@ def load_completion_model(capacity: Capacity = DEFAULT_CAPACITY) -> OPTForCausal
         offload_folder=OFFLOAD_FOLDER,
     )
     assert isinstance(pretrained_causal_lm_model, OPTForCausalLM)
+    print("Done.")
     return pretrained_causal_lm_model
 
 
 @functools.cache
 def load_tokenizer(capacity: Capacity = DEFAULT_CAPACITY) -> GPT2Tokenizer:
+    print(f"Loading Tokenizer for model with {capacity} parameters...")
     pretrained_tokenizer = GPT2Tokenizer.from_pretrained(
         f"facebook/opt-{capacity}",
         device_map="auto",
@@ -85,6 +88,7 @@ def get_response_text(
 ) -> str:
     inputs = tokenize(prompt)
     model = load_completion_model(capacity=capacity)
+    print(f"Generatign based on {prompt=}...")
     generate_ids = model.generate(
         inputs.input_ids.to(model.device), max_length=max_length
     )

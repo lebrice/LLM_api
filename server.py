@@ -37,7 +37,17 @@ def write_server_address_to_file():
         f.write(address_string)
 
 
-app = FastAPI(on_startup=[write_server_address_to_file])
+# TODO: Seems like even if we try to load the models at startup using these callbacks, they still
+# get re-run on the first request, and it seems like we end up with two model instances in memory.
+
+app = FastAPI(
+    on_startup=[
+        # load_tokenizer,
+        # load_completion_model,
+        # load_embedding_model,
+        write_server_address_to_file,
+    ]
+)
 
 from fastapi.responses import RedirectResponse
 
@@ -47,29 +57,37 @@ def root(request: Request):
     return RedirectResponse(url=f"{request.base_url}docs")
 
 
-@app.post("/load_model")
+# TODO: Seems like even when calling `unload_models`, CUDA memory isn't always freed. Therefore, we
+# prevent trying to load multiple models with different capacities. Instead, we just use the
+# capacity as set by the environment variable for now.
+# @app.post("/load_model")
 async def load_model(capacity: Capacity = DEFAULT_CAPACITY):
     """Loads the OPT model with the given capacity, so that the other endpoints can use it."""
     print(f"Loading model with {capacity} parameters...")
-    unload_model()
-    load_completion_model(capacity=capacity)
-    load_embedding_model(capacity=capacity)
+
+    unload_models()
     load_tokenizer(capacity=capacity)
+    load_completion_model(capacity=capacity)
+    # load_embedding_model(capacity=capacity)
+
     global DEFAULT_CAPACITY
     DEFAULT_CAPACITY = capacity
+
+    # TODO: Look into "proper" way of sharing state accross multiple requests with FastAPI.
+    # For now, we use the lru_cache of functools.
     app.state.capacity = capacity
+
     print(f"Done loading model with capacity of {capacity} parameters.")
     return {"status": "ok"}
 
 
-def unload_model():
-    """Unloads the currently loaded model, to free the CUDA memory so another can be loaded."""
-    print(f"Unloading all models...")
+def unload_models():
+    """Unloads the currently loaded models, to free the CUDA memory so another can be loaded."""
+    print(f"Unloading models...")
+    load_tokenizer.cache_clear()
     load_completion_model.cache_clear()
     load_embedding_model.cache_clear()
-    load_tokenizer.cache_clear()
     print(f"Done unloading models.")
-    return {"status": "ok"}
 
 
 @dataclass
@@ -79,7 +97,9 @@ class CompletionResponse:
 
 
 @app.get("/complete/")
-def get_completion(*, prompt: str, max_response_length: int = 30) -> CompletionResponse:
+async def get_completion(
+    *, prompt: str, max_response_length: int = 30
+) -> CompletionResponse:
     """Returns the completion of the given prompt by a language model with the given capacity."""
     print(
         f"Completion request: {prompt=}, model capacity: {DEFAULT_CAPACITY} parameters."
@@ -98,10 +118,13 @@ def get_completion(*, prompt: str, max_response_length: int = 30) -> CompletionR
 class EmbeddingResponse:
     prompt: str
     hidden_state: list[float]
+    """ Flattened hidden-state vector. """
 
 
-@app.get("/embedding/")
-def get_embedding(*, prompt: str) -> EmbeddingResponse:
+# TODO: This makes the webpage freeze, and requires loading a second instance of almost the same
+# model, so turning it off for now.
+# @app.get("/embedding/")
+async def get_embedding(*, prompt: str) -> EmbeddingResponse:
     """Gets the embedding vector for a given prompt."""
     print(
         f"Embedding request: {prompt=}, model capacity: {DEFAULT_CAPACITY} parameters."
