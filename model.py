@@ -1,5 +1,6 @@
 import functools
 import os
+from pathlib import Path
 from typing import Literal
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import BatchEncoding
@@ -25,12 +26,16 @@ def _get_default_capacity() -> Capacity:
 
 
 DEFAULT_CAPACITY: Capacity = _get_default_capacity()
+OFFLOAD_FOLDER: Path = Path(os.environ.get("SLURM_TMPDIR", "offload"))
 
 
 @functools.cache
 def load_embedding_model(capacity: Capacity = DEFAULT_CAPACITY) -> OPTModel:
     pretrained_embedding_model = OPTModel.from_pretrained(
-        f"facebook/opt-{capacity}", device_map="auto"
+        f"facebook/opt-{capacity}",
+        device_map="auto",
+        torch_dtype=torch.float16,
+        offload_folder=OFFLOAD_FOLDER,
     )
     assert isinstance(pretrained_embedding_model, OPTModel)
     return pretrained_embedding_model
@@ -39,7 +44,10 @@ def load_embedding_model(capacity: Capacity = DEFAULT_CAPACITY) -> OPTModel:
 @functools.cache
 def load_completion_model(capacity: Capacity = DEFAULT_CAPACITY) -> OPTForCausalLM:
     pretrained_causal_lm_model = OPTForCausalLM.from_pretrained(
-        f"facebook/opt-{capacity}", device_map="auto"
+        f"facebook/opt-{capacity}",
+        device_map="auto",
+        torch_dtype=torch.float16,
+        offload_folder=OFFLOAD_FOLDER,
     )
     assert isinstance(pretrained_causal_lm_model, OPTForCausalLM)
     return pretrained_causal_lm_model
@@ -85,6 +93,4 @@ def get_response_text(
     )[0]
     assert isinstance(prompt_and_response, str)
     model_response = prompt_and_response.replace(prompt, "").lstrip()
-    print(f"{prompt=}")
-    print(f"{model_response=}")
     return model_response
