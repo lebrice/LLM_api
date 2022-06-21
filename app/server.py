@@ -27,8 +27,10 @@ class ServerConfig(BaseSettings):
     port: int = 12345
 
     reload: bool = False
+    """ Wether to reload the server. """
+    
     model_capacity: str = "13b"
-    # choices: ["350m", "1.3b", "2.7b", "13b", "30b"]
+    """ choices: ["350m", "1.3b", "2.7b", "13b", "30b"] """
 
     offload_folder: Path = Path(os.environ.get("SLURM_TMPDIR", "model_offload"))
 

@@ -5,7 +5,7 @@ import uvicorn
 from simple_parsing import ArgumentParser, field
 from dataclasses import dataclass
 import os
-from server import ServerConfig, app
+from app.server import ServerConfig, app, get_settings
 
 
 def main():
@@ -15,8 +15,6 @@ def main():
     server_config: ServerConfig = args.server
 
     print(f"Running the server with the following settings: {server_config}")
-    # # TODO: Fix this. Really ugly.
-    from server import app, get_settings
 
     app.dependency_overrides[get_settings] = lambda: server_config
 
