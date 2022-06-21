@@ -1,44 +1,70 @@
+
+""" API for querying a large language model. """
+from __future__ import annotations
+
 import functools
+import logging
 import os
+import socket
+from dataclasses import asdict, dataclass
+from logging import getLogger as get_logger
 from pathlib import Path
 from typing import Literal
+
+import torch
+import uvicorn
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import RedirectResponse
+from pydantic import BaseSettings
+from simple_parsing import ArgumentParser
 from transformers.models.gpt2.tokenization_gpt2 import GPT2Tokenizer
 from transformers.models.opt.modeling_opt import OPTForCausalLM
-import torch
-import logging
-
-from fastapi import Depends, FastAPI
-
-from dataclasses import dataclass
-import socket
-import os
-from fastapi import Request
-from logging import getLogger as get_logger
-from fastapi.responses import RedirectResponse
-
-from simple_parsing import field
-from pydantic import BaseSettings
 
 Capacity = Literal["350m", "1.3b", "2.7b", "13b", "30b"]
 
-
-@dataclass(init=False)
-class ServerConfig(BaseSettings):
-    port: int = 12345
-
-    reload: bool = False
-    """ Wether to reload the server. """
-    
-    model_capacity: str = "13b"
-    """ choices: ["350m", "1.3b", "2.7b", "13b", "30b"] """
-
-    offload_folder: Path = Path(os.environ.get("SLURM_TMPDIR", "model_offload"))
-
-
-""" API for querying a large language model. """
 # TODO: Setup logging correctly with FastAPI.
 logger = get_logger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+def get_slurm_tmpdir() -> Path | None:
+    """ Returns the slurm temporary directory, if known.
+    
+    This also works with `mila code`, since the vscode terminals that you get with that command
+    don't have all the SLURM env variables, they only have SLURM_JOB_ID.
+    """
+    if "SLURM_TMPDIR" in os.environ:
+        return Path(os.environ["SLURM_TMPDIR"])
+    if "SLURM_JOB_ID" in os.environ:
+        job_id = os.environ["SLURM_JOB_ID"]
+        slurm_tmpdir = Path(f"/Tmp/slurm.{job_id}.0")
+        if slurm_tmpdir.is_dir():
+            return slurm_tmpdir
+    return None
+
+
+@dataclass(init=False)
+class Settings(BaseSettings):    
+    model_capacity: str = "13b"
+    """ choices: ["350m", "1.3b", "2.7b", "13b", "30b"] """
+
+    
+    
+    port: int = 12345
+    """ The port to run the server on."""
+
+    reload: bool = False
+    """ Wether to restart the server (and reload the model) when the source code changes. """
+    
+    model_capacity: str = "13b"
+    """ Version of the OPT model to use. Can be one of "350m", "1.3b", "2.7b", "13b", or "30b". """
+
+    offload_folder: Path = Path(get_slurm_tmpdir() or "model_offload")
+    """
+    Folder where the model weights will be offloaded if the entire model doesn't fit in memory.
+    """
+
+
 
 
 def write_server_address_to_file():
@@ -55,9 +81,10 @@ def write_server_address_to_file():
 app = FastAPI(
     on_startup=[
         write_server_address_to_file,
-    ]
+    ],
+    title="SLURM + FastAPI + HuggingFace",
+    dependencies=[]
 )
-
 
 @app.get("/")
 def root(request: Request):
@@ -71,15 +98,29 @@ class CompletionResponse:
 
 
 @functools.cache
-def get_settings() -> ServerConfig:
-    return ServerConfig()
+def get_settings() -> Settings:
+    return Settings()
 
+
+def preload_components(settings: Settings = Depends(get_settings)):
+    print(f"Preloading components: {settings=}")
+    load_completion_model(capacity=settings.model_capacity, offload_folder=settings.offload_folder)
+    load_tokenizer(capacity=settings.model_capacity)
+
+# from fastapi_utils.api_settings import get_api_settings
+
+# def get_app() -> FastAPI:
+#     get_api_settings.cache_clear()
+#     settings = get_api_settings()
+#     app = FastAPI(**settings.fastapi_kwargs)
+#     # <Typically, you would include endpoint routers here>
+#     return app
 
 @app.get("/complete/")
 async def get_completion(
     prompt: str,
     max_response_length: int = 30,
-    settings: ServerConfig = Depends(get_settings),
+    settings: Settings = Depends(get_settings),
 ) -> CompletionResponse:
     """Returns the completion of the given prompt by a language model with the given capacity."""
     capacity = settings.model_capacity
@@ -157,3 +198,34 @@ def get_response_text(
 
 #     last_hidden_states = outputs.last_hidden_state
 #     return last_hidden_states
+
+
+
+
+def main():
+    parser = ArgumentParser(description=__doc__)
+    parser.add_arguments(Settings, "settings", default=Settings())
+    args = parser.parse_args()
+    settings: Settings = args.settings
+
+    print(f"Running the server with the following settings: {settings}")
+
+    # NOTE: Can't use `reload` or `workers` when passing the app by value.
+    if not settings.reload:
+        app.dependency_overrides[get_settings] = lambda: settings
+    else:
+        # NOTE: If we we want to use `reload=True`, we set the environment variables, so they are used
+        # when that module gets imported.
+        for k, v in asdict(settings).items():
+            os.environ[k.upper()] = str(v) 
+
+    uvicorn.run(
+        (app if not settings.reload else "app.server:app"),  # type: ignore
+        port=settings.port,
+        log_level="debug",
+        reload=settings.reload,
+    )
+
+
+if __name__ == "__main__":
+    main()
