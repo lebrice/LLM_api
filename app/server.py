@@ -107,14 +107,6 @@ def preload_components(settings: Settings = Depends(get_settings)):
     load_completion_model(capacity=settings.model_capacity, offload_folder=settings.offload_folder)
     load_tokenizer(capacity=settings.model_capacity)
 
-# from fastapi_utils.api_settings import get_api_settings
-
-# def get_app() -> FastAPI:
-#     get_api_settings.cache_clear()
-#     settings = get_api_settings()
-#     app = FastAPI(**settings.fastapi_kwargs)
-#     # <Typically, you would include endpoint routers here>
-#     return app
 
 @app.get("/complete/")
 async def get_completion(
@@ -189,7 +181,7 @@ def get_response_text(
     model_response = prompt_and_response.replace(prompt, "").lstrip()
     return model_response
 
-
+# TODO: Check with students what kind of functionality they want, e.g. extracting representations:
 # @torch.no_grad()
 # def get_hidden_state(prompt: str, capacity: Capacity = DEFAULT_CAPACITY) -> Tensor:
 #     inputs = tokenize(prompt)
@@ -199,8 +191,17 @@ def get_response_text(
 #     last_hidden_states = outputs.last_hidden_state
 #     return last_hidden_states
 
+# TODO: Look into this `APISettings` class.
+# from fastapi_utils.api_settings import get_api_settings, APISettings
 
+# def get_app() -> FastAPI:
+#     get_api_settings.cache_clear()
+#     settings = get_api_settings()
+#     app = FastAPI(**settings.fastapi_kwargs)
+#     # <Typically, you would include endpoint routers here>
+#     return app
 
+# TODO: Add a training example!
 
 def main():
     parser = ArgumentParser(description=__doc__)
@@ -214,8 +215,8 @@ def main():
     if not settings.reload:
         app.dependency_overrides[get_settings] = lambda: settings
     else:
-        # NOTE: If we we want to use `reload=True`, we set the environment variables, so they are used
-        # when that module gets imported.
+        # NOTE: If we we want to use `reload=True`, we set the environment variables, so they are
+        # used when that module gets imported.
         for k, v in asdict(settings).items():
             os.environ[k.upper()] = str(v) 
 
