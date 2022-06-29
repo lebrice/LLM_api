@@ -1,6 +1,10 @@
 # FastAPI + HuggingFace + SLURM
 
-Proof-of-concept for an API for performing inference with a Large Language Model (LLM).
+Proof-of-concept for an API that performs inference with a Large Language Model (LLM).
+
+## The goal:
+
+- One ML researcher/student can submit this as a job on a SLURM cluster, and other users can use a single shared model instance via HTTP or a simple python client.
 
 ## Installation:
 
