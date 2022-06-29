@@ -10,13 +10,13 @@ from dataclasses import asdict, dataclass
 from logging import getLogger as get_logger
 from pathlib import Path
 from typing import Literal
-
 import torch
 import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseSettings
-from simple_parsing import ArgumentParser
+from simple_parsing import ArgumentParser, choice
+from simple_parsing.helpers import field
 from transformers.models.gpt2.tokenization_gpt2 import GPT2Tokenizer
 from transformers.models.opt.modeling_opt import OPTForCausalLM
 
@@ -44,9 +44,11 @@ def get_slurm_tmpdir() -> Path | None:
 
 
 @dataclass(init=False)
-class Settings(BaseSettings):    
-    model_capacity: str = "13b"
-    """ choices: ["350m", "1.3b", "2.7b", "13b", "30b"] """
+class Settings(BaseSettings):
+    """ Configuration settings for the API. """
+
+    model_capacity: str = choice("350m", "1.3b", "2.7b", "13b", "30b", default="13b")
+    """ Model capacity. """
 
     hf_cache_dir: Path = Path("~/scratch/cache/huggingface")
     
@@ -211,10 +213,10 @@ def main():
 
     HF_HOME = os.environ.setdefault("HF_HOME", str(settings.hf_cache_dir))
     TRANSFORMERS_CACHE = os.environ.setdefault("TRANSFORMERS_CACHE", str(settings.hf_cache_dir / "transformers"))
-    print(f"HF_HOME: {HF_HOME=}")
-    print(f"TRANSFORMERS_CACHE: {TRANSFORMERS_CACHE=}")
+    print(f"{HF_HOME=}")
+    print(f"{TRANSFORMERS_CACHE=}")
 
-    print(f"Running the server with the following settings: {settings}")
+    print(f"Running the server with the following settings: {settings.json()}")
 
     # NOTE: Can't use `reload` or `workers` when passing the app by value.
     if not settings.reload:
