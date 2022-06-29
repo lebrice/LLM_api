@@ -8,11 +8,20 @@ Proof-of-concept for an API that performs inference with a Large Language Model 
 
 ## Installation:
 
+To run the server locally:
+
 ```console
 > conda create -n llm python=3.10
 > conda activate llm
 > pip install git+https://www.github.com/lebrice/LLM_api.git
 ```
+
+(WIP) To connect to a running API:
+```
+# (from any version of python >= 3.7:)
+pip install git+https://www.github.com/lebrice/LLM_api.git
+```
+
 
 ## Usage:
 
