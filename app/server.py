@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     model_capacity: str = "13b"
     """ choices: ["350m", "1.3b", "2.7b", "13b", "30b"] """
 
-    
+    hf_cache_dir: Path = Path("~/scratch/cache/huggingface")
     
     port: int = 12345
     """ The port to run the server on."""
@@ -208,6 +208,11 @@ def main():
     parser.add_arguments(Settings, "settings", default=Settings())
     args = parser.parse_args()
     settings: Settings = args.settings
+
+    HF_HOME = os.environ.setdefault("HF_HOME", str(settings.hf_cache_dir))
+    TRANSFORMERS_CACHE = os.environ.setdefault("TRANSFORMERS_CACHE", str(settings.hf_cache_dir / "transformers"))
+    print(f"HF_HOME: {HF_HOME=}")
+    print(f"TRANSFORMERS_CACHE: {TRANSFORMERS_CACHE=}")
 
     print(f"Running the server with the following settings: {settings}")
 

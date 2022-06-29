@@ -10,4 +10,4 @@
 export MODEL_CAPACITY="13b"
 export PORT=12345
 export TRANSFORMERS_CACHE=~/scratch
-uvicorn server:app --port $SERVER_PORT
+uvicorn app.server:app --port $PORT
