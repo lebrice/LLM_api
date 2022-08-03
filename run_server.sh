@@ -9,5 +9,5 @@
 #  TODO: Write an sbatch script to start the server with a given model capacity.
 export MODEL_CAPACITY="13b"
 export PORT=12345
-export TRANSFORMERS_CACHE=~/scratch
+# export TRANSFORMERS_CACHE=~/scratch
 uvicorn app.server:app --port $PORT

@@ -226,10 +226,11 @@ def main():
         # used when that module gets imported.
         for k, v in asdict(settings).items():
             os.environ[k.upper()] = str(v) 
-
+    # ssh -nNL 10101:cn-a010:12345 mila
     uvicorn.run(
         (app if not settings.reload else "app.server:app"),  # type: ignore
         port=settings.port,
+        # host=socket.gethostname(),
         log_level="debug",
         reload=settings.reload,
     )
