@@ -32,9 +32,9 @@ Available options:
 ```console
 $ python app/server.py --help
 usage: server.py [-h] [--model str] [--hf_cache_dir Path] [--port int]
-                 [--reload bool] [--offload_folder Path]
+                 [--reload bool] [--offload_folder Path] [--use_public_ip bool]
 
- API for querying a large language model. 
+ API for querying a large language model.
 
 options:
   -h, --help            show this help message and exit
@@ -42,16 +42,26 @@ options:
 Settings ['settings']:
   Configuration settings for the API.
 
-  --model str           HuggingFace Model to use. Examples: facebook/opt-13b,
-                        facebook/opt-30b, facebook/opt-66b, bigscience/bloom, etc.
-                        (default: facebook/opt-13b)
+  --model str           HuggingFace model to use. Examples: facebook/opt-13b,
+                        facebook/opt-30b, facebook/opt-66b, bigscience/bloom,
+                        etc. (default: facebook/opt-13b)
   --hf_cache_dir Path   (default: $SCRATCH/cache/huggingface)
   --port int            The port to run the server on. (default: 12345)
-  --reload bool         Wether to restart the server (and reload the model) when the
-                        source code changes. (default: False)
+  --reload bool         Whether to restart the server (and reload the model) when
+                        the source code changes. (default: False)
   --offload_folder Path
                         Folder where the model weights will be offloaded if the
-                        entire model doesn't fit in memory. (default: $SLURM_TMPDIR)
+                        entire model doesn't fit in memory. (default:
+                        $SLURM_TMPDIR)
+  --use_public_ip bool  Set to True to make the server available on the node's
+                        public IP, rather than localhost. Setting this to False
+                        is useful when using VSCode to debug the server, since
+                        the port forwarding is done automatically for you.
+                        Setting this to True makes it so many users on the
+                        cluster can share the same server. However, at the
+                        moment, you would still need to do the port forwarding
+                        setup yourself, if you want to access the server from
+                        outside the cluster. (default: False)
 ```
 
 Spinning up the server:

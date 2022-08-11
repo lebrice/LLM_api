@@ -8,13 +8,14 @@ import socket
 from dataclasses import asdict, dataclass
 from logging import getLogger as get_logger
 from pathlib import Path
+
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BloomForCausalLM
 import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseSettings
 from simple_parsing import ArgumentParser
+from transformers import AutoModelForCausalLM, AutoTokenizer, BloomForCausalLM
 from transformers.models.gpt2.tokenization_gpt2 import GPT2Tokenizer
 from transformers.models.opt.modeling_opt import OPTForCausalLM
 
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
     """Configuration settings for the API."""
 
     model: str = "facebook/opt-13b"
-    """ HuggingFace Model to use. 
+    """ HuggingFace model to use.
     Examples: facebook/opt-13b, facebook/opt-30b, facebook/opt-66b, bigscience/bloom, etc.
     """
 
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
     """ The port to run the server on."""
 
     reload: bool = False
-    """ Wether to restart the server (and reload the model) when the source code changes. """
+    """ Whether to restart the server (and reload the model) when the source code changes. """
 
     offload_folder: Path = Path(get_slurm_tmpdir() or "model_offload")
     """
@@ -63,11 +64,13 @@ class Settings(BaseSettings):
 
     use_public_ip: bool = False
     """ Set to True to make the server available on the node's public IP, rather than localhost.
+
     Setting this to False is useful when using VSCode to debug the server, since the port
     forwarding is done automatically for you.
+
     Setting this to True makes it so many users on the cluster can share the same server. However,
     at the moment, you would still need to do the port forwarding setup yourself, if you want to
-    access the server from outside the cluster.    
+    access the server from outside the cluster.
     """
 
 
@@ -108,9 +111,7 @@ class CompletionResponse:
 
 def preload_components(settings: Settings = Depends(get_settings)):
     print(f"Preloading components: {settings=}")
-    load_completion_model(
-        capacity=settings.model, offload_folder=settings.offload_folder
-    )
+    load_completion_model(capacity=settings.model, offload_folder=settings.offload_folder)
     load_tokenizer(capacity=settings.model)
 
 
@@ -144,9 +145,7 @@ async def get_completion(
 
 
 @functools.cache
-def load_completion_model(
-    model: str, offload_folder: Path
-) -> OPTForCausalLM | BloomForCausalLM:
+def load_completion_model(model: str, offload_folder: Path) -> OPTForCausalLM | BloomForCausalLM:
     print(f"Loading model: {model}...")
     extra_kwargs = {}
     if model.startswith("bigscience/bloom"):
@@ -187,9 +186,7 @@ def get_response_text(
 ) -> str:
     inputs = tokenizer(prompt, return_tensors="pt")
     print(f"Generating based on {prompt=}...")
-    generate_ids = model.generate(
-        inputs.input_ids.to(model.device), max_length=max_response_length
-    )
+    generate_ids = model.generate(inputs.input_ids.to(model.device), max_length=max_response_length)
     prompt_and_response = tokenizer.batch_decode(
         generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0]
