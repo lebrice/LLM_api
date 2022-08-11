@@ -1,4 +1,3 @@
-
 """ API for querying a large language model. """
 from __future__ import annotations
 
@@ -11,6 +10,7 @@ from logging import getLogger as get_logger
 from pathlib import Path
 from typing import Literal
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, BloomForCausalLM
 import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
@@ -20,7 +20,14 @@ from simple_parsing.helpers import field
 from transformers.models.gpt2.tokenization_gpt2 import GPT2Tokenizer
 from transformers.models.opt.modeling_opt import OPTForCausalLM
 
-Capacity = Literal["350m", "1.3b", "2.7b", "13b", "30b"]
+Model = Literal[
+    f"facebook/opt-350m",
+    f"facebook/opt-1.3b",
+    f"facebook/opt-2.7b",
+    f"facebook/opt-13b",
+    f"facebook/opt-30b",
+    "bigscience/bloom",
+]
 
 # TODO: Setup logging correctly with FastAPI.
 logger = get_logger(__name__)
@@ -28,8 +35,8 @@ logger.setLevel(logging.DEBUG)
 
 
 def get_slurm_tmpdir() -> Path | None:
-    """ Returns the slurm temporary directory, if known.
-    
+    """Returns the slurm temporary directory, if known.
+
     This also works with `mila code`, since the vscode terminals that you get with that command
     don't have all the SLURM env variables, they only have SLURM_JOB_ID.
     """
@@ -45,21 +52,20 @@ def get_slurm_tmpdir() -> Path | None:
 
 @dataclass(init=False)
 class Settings(BaseSettings):
-    """ Configuration settings for the API. """
+    """Configuration settings for the API."""
 
-    model_capacity: str = choice("350m", "1.3b", "2.7b", "13b", "30b", default="13b")
-    """ Model capacity. """
+    model: Model = "facebook/opt-13b"
+    """ HuggingFace Model to use. 
+    Examples: facebook/opt-13b, facebook/opt-30b, facebook/opt-66b, bigscience/bloom, etc.
+    """
 
     hf_cache_dir: Path = Path("~/scratch/cache/huggingface")
-    
+
     port: int = 12345
     """ The port to run the server on."""
 
     reload: bool = False
     """ Wether to restart the server (and reload the model) when the source code changes. """
-    
-    model_capacity: str = "13b"
-    """ Version of the OPT model to use. Can be one of "350m", "1.3b", "2.7b", "13b", or "30b". """
 
     offload_folder: Path = Path(get_slurm_tmpdir() or "model_offload")
     """
@@ -67,13 +73,8 @@ class Settings(BaseSettings):
     """
 
 
-
-
-def write_server_address_to_file():
+def write_server_address_to_file(port: int = 12345):
     node_hostname = socket.gethostname()
-    # TODO: We could perhaps detect the server port that is being used by FASTAPI programmatically?
-    port = int(os.environ.get("SERVER_PORT", "8000"))
-
     with open("server.txt", "w") as f:
         address_string = f"{node_hostname}:{port}"
         print(f"Writing {address_string=} to server.txt")
@@ -85,8 +86,15 @@ app = FastAPI(
         write_server_address_to_file,
     ],
     title="SLURM + FastAPI + HuggingFace",
-    dependencies=[]
+    dependencies=[],
 )
+
+
+@functools.cache
+def get_settings() -> Settings:
+    # Creates a Settings object from the environment variables.
+    return Settings()
+
 
 @app.get("/")
 def root(request: Request):
@@ -99,15 +107,12 @@ class CompletionResponse:
     response: str
 
 
-@functools.cache
-def get_settings() -> Settings:
-    return Settings()
-
-
 def preload_components(settings: Settings = Depends(get_settings)):
     print(f"Preloading components: {settings=}")
-    load_completion_model(capacity=settings.model_capacity, offload_folder=settings.offload_folder)
-    load_tokenizer(capacity=settings.model_capacity)
+    load_completion_model(
+        capacity=settings.model, offload_folder=settings.offload_folder
+    )
+    load_tokenizer(capacity=settings.model)
 
 
 @app.get("/complete/")
@@ -117,12 +122,12 @@ async def get_completion(
     settings: Settings = Depends(get_settings),
 ) -> CompletionResponse:
     """Returns the completion of the given prompt by a language model with the given capacity."""
-    capacity = settings.model_capacity
+    model_name = settings.model
     offload_folder = settings.offload_folder
-    print(f"Completion request: {prompt=}, model capacity: {capacity} parameters.")
+    print(f"Completion request: {prompt=}, model: {model_name}")
 
-    model = load_completion_model(capacity=capacity, offload_folder=offload_folder)
-    tokenizer = load_tokenizer(capacity=capacity)
+    model = load_completion_model(model=model_name, offload_folder=offload_folder)
+    tokenizer = load_tokenizer(model=model_name)
 
     response_text = get_response_text(
         model=model,
@@ -139,34 +144,40 @@ async def get_completion(
 
 
 @functools.cache
-def load_completion_model(capacity: Capacity, offload_folder: Path) -> OPTForCausalLM:
-    print(f"Loading OPT completion model with {capacity} parameters...")
-    pretrained_causal_lm_model = OPTForCausalLM.from_pretrained(
-        f"facebook/opt-{capacity}",
+def load_completion_model(
+    model: Model, offload_folder: Path
+) -> OPTForCausalLM | BloomForCausalLM:
+    print(f"Loading model: {model}...")
+    pretrained_causal_lm_model = AutoModelForCausalLM.from_pretrained(
+        model,
         device_map="auto",
         torch_dtype=torch.float16,
         offload_folder=offload_folder,
+        load_in_8bit=(model.startswith("bigscience/bloom")),
     )
-    assert isinstance(pretrained_causal_lm_model, OPTForCausalLM)
     print("Done.")
     return pretrained_causal_lm_model
 
 
 @functools.cache
-def load_tokenizer(capacity: Capacity) -> GPT2Tokenizer:
-    print(f"Loading Tokenizer for model with {capacity} parameters...")
-    pretrained_tokenizer = GPT2Tokenizer.from_pretrained(
-        f"facebook/opt-{capacity}",
+def load_tokenizer(model: Model) -> GPT2Tokenizer:
+    print(f"Loading Tokenizer for model {model}...")
+    # NOTE: See https://github.com/huggingface/tokenizers/pull/1005
+    kwargs = {}
+    if model.startswith("facebook/opt"):
+        kwargs.update(fast=False)
+    pretrained_tokenizer = AutoTokenizer.from_pretrained(
+        model,
         device_map="auto",
         torch_dtype=torch.float16,
+        **kwargs,
     )
-    assert isinstance(pretrained_tokenizer, GPT2Tokenizer)
     return pretrained_tokenizer
 
 
 @torch.no_grad()
 def get_response_text(
-    model: OPTForCausalLM,
+    model: OPTForCausalLM | BloomForCausalLM,
     tokenizer: GPT2Tokenizer,
     prompt: str,
     max_response_length: int = 30,
@@ -183,7 +194,9 @@ def get_response_text(
     model_response = prompt_and_response.replace(prompt, "").lstrip()
     return model_response
 
-# TODO: Check with students what kind of functionality they want, e.g. extracting representations:
+
+# TODOs:
+# - Check with students what kind of functionality they want, e.g. extracting representations:
 # @torch.no_grad()
 # def get_hidden_state(prompt: str, capacity: Capacity = DEFAULT_CAPACITY) -> Tensor:
 #     inputs = tokenize(prompt)
@@ -192,18 +205,9 @@ def get_response_text(
 
 #     last_hidden_states = outputs.last_hidden_state
 #     return last_hidden_states
+# - Add a training example!
+# - Create a slurm sbatch script to run this.
 
-# TODO: Look into this `APISettings` class.
-# from fastapi_utils.api_settings import get_api_settings, APISettings
-
-# def get_app() -> FastAPI:
-#     get_api_settings.cache_clear()
-#     settings = get_api_settings()
-#     app = FastAPI(**settings.fastapi_kwargs)
-#     # <Typically, you would include endpoint routers here>
-#     return app
-
-# TODO: Add a training example!
 
 def main():
     parser = ArgumentParser(description=__doc__)
@@ -212,7 +216,9 @@ def main():
     settings: Settings = args.settings
 
     HF_HOME = os.environ.setdefault("HF_HOME", str(settings.hf_cache_dir))
-    TRANSFORMERS_CACHE = os.environ.setdefault("TRANSFORMERS_CACHE", str(settings.hf_cache_dir / "transformers"))
+    TRANSFORMERS_CACHE = os.environ.setdefault(
+        "TRANSFORMERS_CACHE", str(settings.hf_cache_dir / "transformers")
+    )
     print(f"{HF_HOME=}")
     print(f"{TRANSFORMERS_CACHE=}")
 
@@ -225,11 +231,15 @@ def main():
         # NOTE: If we we want to use `reload=True`, we set the environment variables, so they are
         # used when that module gets imported.
         for k, v in asdict(settings).items():
-            os.environ[k.upper()] = str(v) 
-    # ssh -nNL 10101:cn-a010:12345 mila
+            os.environ[k.upper()] = str(v)
+
+    write_server_address_to_file(port=settings.port)
+
     uvicorn.run(
         (app if not settings.reload else "app.server:app"),  # type: ignore
         port=settings.port,
+        # Uncomment to make the server publicly available, but a bit harder to debug (no automatic
+        # port forwarding in VSCode).
         # host=socket.gethostname(),
         log_level="debug",
         reload=settings.reload,
