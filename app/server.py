@@ -8,26 +8,15 @@ import socket
 from dataclasses import asdict, dataclass
 from logging import getLogger as get_logger
 from pathlib import Path
-from typing import Literal
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BloomForCausalLM
 import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseSettings
-from simple_parsing import ArgumentParser, choice
-from simple_parsing.helpers import field
+from simple_parsing import ArgumentParser
 from transformers.models.gpt2.tokenization_gpt2 import GPT2Tokenizer
 from transformers.models.opt.modeling_opt import OPTForCausalLM
-
-Model = Literal[
-    f"facebook/opt-350m",
-    f"facebook/opt-1.3b",
-    f"facebook/opt-2.7b",
-    f"facebook/opt-13b",
-    f"facebook/opt-30b",
-    "bigscience/bloom",
-]
 
 # TODO: Setup logging correctly with FastAPI.
 logger = get_logger(__name__)
@@ -156,7 +145,7 @@ async def get_completion(
 
 @functools.cache
 def load_completion_model(
-    model: Model, offload_folder: Path
+    model: str, offload_folder: Path
 ) -> OPTForCausalLM | BloomForCausalLM:
     print(f"Loading model: {model}...")
     extra_kwargs = {}
@@ -174,7 +163,7 @@ def load_completion_model(
 
 
 @functools.cache
-def load_tokenizer(model: Model) -> GPT2Tokenizer:
+def load_tokenizer(model: str) -> GPT2Tokenizer:
     print(f"Loading Tokenizer for model {model}...")
     # NOTE: See https://github.com/huggingface/tokenizers/pull/1005
     kwargs = {}
