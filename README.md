@@ -11,13 +11,14 @@ Proof-of-concept for an API that performs inference with a Large Language Model 
 To run the server locally:
 
 ```console
-> conda create -n llm python=3.10
+> conda env create -n llm -f env.yaml
 > conda activate llm
 > pip install git+https://www.github.com/lebrice/LLM_api.git
+> python app/server.py
 ```
 
-(WIP) To connect to a running API:
-```
+(WIP) To connect to a running LLM server:
+```console
 # (from any version of python >= 3.7:)
 pip install git+https://www.github.com/lebrice/LLM_api.git
 ```
@@ -27,8 +28,8 @@ pip install git+https://www.github.com/lebrice/LLM_api.git
 
 Available options:
 ```console
-> python app/server.py --help
-usage: server.py [-h] [--model_capacity str] [--hf_cache_dir Path] [--port int]
+$ python app/server.py --help
+usage: server.py [-h] [--model str] [--hf_cache_dir Path] [--port int]
                  [--reload bool] [--offload_folder Path]
 
  API for querying a large language model. 
@@ -37,16 +38,18 @@ options:
   -h, --help            show this help message and exit
 
 Settings ['settings']:
-   Configuration settings for the API. 
+  Configuration settings for the API.
 
-  --model_capacity str  Model capacity. (default: 13b)
-  --hf_cache_dir Path   (default: ~/scratch/cache/huggingface)
+  --model str           HuggingFace Model to use. Examples: facebook/opt-13b,
+                        facebook/opt-30b, facebook/opt-66b, bigscience/bloom, etc.
+                        (default: facebook/opt-13b)
+  --hf_cache_dir Path   (default: $SCRATCH/cache/huggingface)
   --port int            The port to run the server on. (default: 12345)
   --reload bool         Wether to restart the server (and reload the model) when the
                         source code changes. (default: False)
   --offload_folder Path
-                        Folder where the model weights will be offloaded if the entire
-                        model doesn't fit in memory. (default: /Tmp/slurm.1968686.0)
+                        Folder where the model weights will be offloaded if the
+                        entire model doesn't fit in memory. (default: $SLURM_TMPDIR)
 ```
 
 Spinning up the server:

@@ -54,7 +54,7 @@ def get_slurm_tmpdir() -> Path | None:
 class Settings(BaseSettings):
     """Configuration settings for the API."""
 
-    model: Model = "facebook/opt-13b"
+    model: str = "facebook/opt-13b"
     """ HuggingFace Model to use. 
     Examples: facebook/opt-13b, facebook/opt-30b, facebook/opt-66b, bigscience/bloom, etc.
     """
@@ -153,7 +153,7 @@ def load_completion_model(
         device_map="auto",
         torch_dtype=torch.float16,
         offload_folder=offload_folder,
-        load_in_8bit=(model.startswith("bigscience/bloom")),
+        load_in_8bit=model.startswith("bigscience/bloom"),
     )
     print("Done.")
     return pretrained_causal_lm_model
