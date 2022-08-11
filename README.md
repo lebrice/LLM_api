@@ -2,8 +2,7 @@
 
 Proof-of-concept for an API that performs inference with a Large Language Model (LLM) on the Mila cluster.
 
-![LLM_api](https://user-images.githubusercontent.com/13387299/184187402-8f7658e7-ea15-4220-9e98-c0dcd38ab7b4.png)
-
+![LLM_api](https://user-images.githubusercontent.com/13387299/184188304-3ce82a7f-29a6-49ed-86ba-4842db4e207e.png)
 
 ## The goal:
 
