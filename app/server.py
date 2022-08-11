@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     Folder where the model weights will be offloaded if the entire model doesn't fit in memory.
     """
 
+    use_public_ip: bool = False
+    """ Set to True to make the server available on the node's public IP, rather than localhost.
+    Setting this to False is useful when using VSCode to debug the server, since the port
+    forwarding is done automatically for you.
+    Setting this to True makes it so many users on the cluster can share the same server. However,
+    at the moment, you would still need to do the port forwarding setup yourself, if you want to
+    access the server from outside the cluster.    
+    """
+
 
 def write_server_address_to_file(port: int = 12345):
     node_hostname = socket.gethostname()
@@ -105,6 +114,7 @@ def root(request: Request):
 class CompletionResponse:
     prompt: str
     response: str
+    model: str
 
 
 def preload_components(settings: Settings = Depends(get_settings)):
@@ -140,6 +150,7 @@ async def get_completion(
     return CompletionResponse(
         prompt=prompt,
         response=response_text,
+        model=model_name,
     )
 
 
@@ -148,12 +159,15 @@ def load_completion_model(
     model: Model, offload_folder: Path
 ) -> OPTForCausalLM | BloomForCausalLM:
     print(f"Loading model: {model}...")
+    extra_kwargs = {}
+    if model.startswith("bigscience/bloom"):
+        extra_kwargs.update(load_in_8bit=True)
     pretrained_causal_lm_model = AutoModelForCausalLM.from_pretrained(
         model,
         device_map="auto",
         torch_dtype=torch.float16,
         offload_folder=offload_folder,
-        load_in_8bit=model.startswith("bigscience/bloom"),
+        **extra_kwargs,
     )
     print("Done.")
     return pretrained_causal_lm_model
@@ -165,7 +179,7 @@ def load_tokenizer(model: Model) -> GPT2Tokenizer:
     # NOTE: See https://github.com/huggingface/tokenizers/pull/1005
     kwargs = {}
     if model.startswith("facebook/opt"):
-        kwargs.update(fast=False)
+        kwargs.update(use_fast=False)
     pretrained_tokenizer = AutoTokenizer.from_pretrained(
         model,
         device_map="auto",
@@ -240,7 +254,7 @@ def main():
         port=settings.port,
         # Uncomment to make the server publicly available, but a bit harder to debug (no automatic
         # port forwarding in VSCode).
-        # host=socket.gethostname(),
+        host=socket.gethostname() if settings.use_public_ip else "127.0.0.1",
         log_level="debug",
         reload=settings.reload,
     )
