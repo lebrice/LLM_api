@@ -1,6 +1,9 @@
 # FastAPI + HuggingFace + SLURM
 
-Proof-of-concept for an API that performs inference with a Large Language Model (LLM).
+Proof-of-concept for an API that performs inference with a Large Language Model (LLM) on the Mila cluster.
+
+![LLM_api](https://user-images.githubusercontent.com/13387299/184187402-8f7658e7-ea15-4220-9e98-c0dcd38ab7b4.png)
+
 
 ## The goal:
 
@@ -11,16 +14,16 @@ Proof-of-concept for an API that performs inference with a Large Language Model 
 To run the server locally:
 
 ```console
-> conda env create -n llm -f env.yaml
+> conda env create -n llm python=3.10
 > conda activate llm
 > pip install git+https://www.github.com/lebrice/LLM_api.git
-> python app/server.py
 ```
 
 (WIP) To connect to a running LLM server:
+
+(Requires python >= 3.7)
 ```console
-# (from any version of python >= 3.7:)
-pip install git+https://www.github.com/lebrice/LLM_api.git
+> pip install git+https://www.github.com/lebrice/LLM_api.git
 ```
 
 
@@ -71,7 +74,7 @@ INFO:     Uvicorn running on http://127.0.0.1:12345 (Press CTRL+C to quit)
 > sbatch run_server.sh
 ```
 
-(WIP) Connecting to a running job:
+(WIP) Using the python client to Connect to a running server:
 
 ```python
 import time
